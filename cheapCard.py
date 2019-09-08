@@ -7,6 +7,8 @@ CACHE_DIR = "./cache"
 DUST_TABLE = "./cardust.csv"
 CRAFT_TABLE = "./cardcraft.csv"
 
+SALE_TAX = 0.11
+
 #Class that represents a card lifted from the market
 class Card:
 
@@ -55,7 +57,7 @@ class Recipe:
             self.cost += cards[cardName].cost
         self.cost += priceOneDust*self.dustNeeded
         self.cost += self.zenyNeeded
-        self.profit = int(cards[self.name].cost*0.90-self.cost)
+        self.profit = int(cards[self.name].cost*(1-SALE_TAX)-self.cost)
         return
 
     def __str__(self):
@@ -69,6 +71,7 @@ def loadFromCache(date):
     for r, d, f in os.walk(dateDir):
         for file in f:
             files.append(os.path.join(r, file))
+            print(os.path.join(r, file))
     for file in files:
         with open(file,"r") as f:
             data.append(json.load(f))            
@@ -77,23 +80,27 @@ def loadFromCache(date):
 #Reads the jsons from the website
 def loadFromSite(date):
     dateDir = os.path.join(CACHE_DIR,date)
-    os.mkdir(dateDir)
+    try:
+        os.mkdir(dateDir)
+    except:
+        pass
     jsons = []
     code = 200
     index = 0
     while True:
-        r = requests.get('https://www.romexchange.com/api?item=card&exact=false&slim=true&page='+str(index))
+        r = requests.get('https://us-central1-rom-exchange.cloudfunctions.net/api?item=card&exact=false&slim=true&page='+str(index))
         code = r.status_code
         if code != 200:
-            break
-        json = r.json()
-        if len(json) == 0:
+            print(str(code)+":"+str(r.content))
+            exit(1)
+        receivedJson = r.json()
+        if len(receivedJson) == 0:
             break
         else:
-            jsons.append(json)
+            jsons.append(receivedJson)
             with open(os.path.join(dateDir,str(index))+".json", "w") as f:
-                f.write(str(json).replace("'","\"").replace("None","null"))
-                #json.dump(json[0], f)
+                #f.write(str(json).replace("'","\'").replace("None","null"))
+                json.dump(receivedJson, f)
             print("Fetched page: "+str(index))
             index += 1     
     return jsons
@@ -101,7 +108,8 @@ def loadFromSite(date):
 #Checks the fetching options and returns an array of jsons
 def fetchData(ignoreCache=False):
     today = str(datetime.date.today())
-    if (os.path.isdir(os.path.join(CACHE_DIR,today))):
+    dirPath = os.path.join(CACHE_DIR,today)
+    if (os.path.isdir(dirPath)) and len(os.listdir(dirPath)) != 0:
         return loadFromCache(today)
     else:
         return loadFromSite(today)
@@ -181,7 +189,6 @@ def printAll(num):
 
 #Prints the cheapest num cards for dusting
 def printCheapestDust(num):
-
     data = fetchPriceData()
     loadDust(data)
 
